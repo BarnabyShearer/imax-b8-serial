@@ -1,13 +1,14 @@
-#! /usr/bin/env python3
-#
-# Copyright 2014 b@Zi.iS
-# License: GPLv2
+"""Serial interface to monitor LiPo charger."""
 
-import sys
-import serial
-from ctypes import *
+from ctypes import Structure, c_ubyte, c_uint16, c_ushort
+from typing import Any, Iterator
+
+import serial  # type: ignore
+
 
 class Settings(Structure):
+    """Settings."""
+
     _pack_ = 1
     _fields_ = [
         ("Temp Cutoff", c_ubyte, 1),
@@ -20,7 +21,14 @@ class Settings(Structure):
         ("e", c_ubyte, 1),
     ]
 
+    def __getitem__(self, attr: str) -> Any:
+        """Decode the settings into pythonic."""
+        return self.__getattribute__(attr)
+
+
 class Packet(Structure):
+    """Communication packet."""
+
     _fields_ = [
         ("settings", Settings),
         ("nimh_sensitivity", c_ubyte),
@@ -66,39 +74,40 @@ class Packet(Structure):
         ("lipo_cell6", c_uint16),
         ("lipo_cell7", c_uint16),
     ]
-    def __getitem__(self, attr):
+
+    def __getitem__(self, attr: str) -> Any:
+        """Decode the packet into pythonic."""
         val = self.__getattribute__(attr)
-        if (dict(self._fields_)[attr] == c_ushort):
-            val = (val>>8)/100. + (val & 0xFF)
+        if dict(self._fields_)[attr] == c_ushort:
+            val = (val >> 8) / 100.0 + (val & 0xFF)
         if attr == "backlight":
-            val = "%d%%" % (val * 5);
+            val = "%d%%" % (val * 5)
         if attr == "mode":
-            val = {0:"Discharge", 1:"Charge", 0x10:"D to C", 0x11:"C to D"}[val]
+            val = {0: "Discharge", 1: "Charge", 0x10: "D to C", 0x11: "C to D"}[val]
         if attr == "type":
-            val = {0:"None", 1:"Li", 2:"Nm", 3:"Nc", 4:"Pb"}[val]
+            val = {0: "None", 1: "Li", 2: "Nm", 3: "Nc", 4: "Pb"}[val]
         if attr.endswith("_current"):
-            val = val / 10.
+            val = val / 10.0
         return val
 
-if __name__ == "__main__":
-    ser = serial.Serial(port = sys.argv[1], baudrate=9600)
+
+def read(ser: serial.Serial) -> Iterator[Packet]:  # pragma: no cover
+    """Read packets from serial interface."""
     packet = bytearray()
     while True:
         for byte in ser.read():
-            if byte == ord('}'):
-                break;
-        if byte == ord('}'):
-            break;
+            if byte == ord("}"):
+                break
+        if byte == ord("}"):
+            break
     while True:
         for byte in ser.read():
-            if byte == ord('{'):
+            if byte == ord("{"):
                 del packet[:]
-            elif byte == ord('}'):
+            elif byte == ord("}"):
                 data = Packet.from_buffer(packet)
-                for attr in dir(data):
-                    if not attr.startswith('_'):
-                        print(attr, "=", data[attr])
+                yield data
             else:
-                if(byte >= 128):
-                    byte = byte-128
+                if byte >= 128:
+                    byte = byte - 128
                 packet.append(byte)
