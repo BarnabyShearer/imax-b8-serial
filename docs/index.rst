@@ -1,4 +1,4 @@
-imax_b8_serial
+imax-b8-serial
 ==============
 
 Serial interface to monitor LiPo charger.
